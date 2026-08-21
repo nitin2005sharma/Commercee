@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: commerce
+      POSTGRES_DB: commerce
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U commerce -d commerce"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ./src/server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./src/server/.env
+    environment:
+      # Overrides so the server talks to the other containers by service name,
+      # regardless of what's set in .env for local (non-Docker) development.
+      DATABASE_URL: postgresql://commerce:commerce@postgres:5432/commerce
+      REDIS_URL: redis://redis:6379
+      PORT: 5000
+      NODE_ENV: production
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./src/client
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL_PROD: http://localhost:5000/api/v1
+    restart: unless-stopped
+    env_file:
+      - ./src/client/.env
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,973 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ROLE {
+  ADMIN
+  USER
+  SUPERADMIN
+}
+
+enum TRANSACTION_STATUS {
+  PENDING
+  PROCESSING
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  CANCELED
+  RETURNED
+  REFUNDED
+}
+
+enum PAYMENT_STATUS {
+  PENDING
+  PAID
+  CANCELED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum CART_STATUS {
+  ACTIVE
+  ABANDONED
+  CONVERTED
+}
+
+enum CHAT_STATUS {
+  OPEN
+  RESOLVED
+}
+
+enum CHECKOUT_ATTEMPT_STATUS {
+  STARTED
+  FAILED
+  COMPLETED
+  CANCELED
+}
+
+enum CHECKOUT_RECOVERY_STATUS {
+  OPEN
+  RESOLVED
+  EXPIRED
+}
+
+enum SHARED_CART_MEMBER_ROLE {
+  OWNER
+  CONTRIBUTOR
+  VIEWER
+}
+
+enum SHARED_CART_VOTE_TYPE {
+  UPVOTE
+  DOWNVOTE
+}
+
+enum COMPANION_TASK_KIND {
+  SETUP
+  CARE
+  WARRANTY
+  REORDER
+  SUPPORT
+}
+
+enum GOAL_SUCCESS_STATUS {
+  PENDING
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum GOAL_SUCCESS_REASON {
+  MISSING_ITEM
+  FIT
+  QUALITY
+  SETUP
+  DELIVERY
+  BUDGET
+  STYLE
+  WRONG_MATCH
+  OTHER
+}
+
+enum GOAL_SUCCESS_INTERVENTION_TYPE {
+  REVIEW
+  REMINDER
+  SUPPORT_CHAT
+  CARE_GUIDE
+  MISSING_STEP
+  EXCHANGE
+  CURATION
+}
+
+enum GOAL_SUCCESS_STAGE {
+  DELIVERY
+  SETUP
+  FOLLOW_UP
+}
+
+enum GOAL_STEP_SUCCESS_STATUS {
+  PENDING
+  ACHIEVED
+  PARTIAL
+  MISSED
+  NOT_APPLICABLE
+}
+
+enum GOAL_BUNDLE_TYPE {
+  CURATED
+  CUSTOM
+  FREQUENT
+}
+
+enum SHARED_CART_INVITE_MODE {
+  COLLABORATE
+  VIEW_ONLY
+}
+
+enum SHARED_CART_ASSIGNMENT_STATUS {
+  CLAIMED
+  PURCHASING
+  PURCHASED
+  RELEASED
+}
+
+enum SHARED_CART_ACTIVITY_TYPE {
+  MEMBER_JOINED
+  ITEM_UPDATED
+  ITEM_REMOVED
+  VOTE_ADDED
+  NOTE_ADDED
+  ASSIGNMENT_UPDATED
+  SETTINGS_UPDATED
+  INVITE_REGENERATED
+}
+
+enum ORDER_TRACKING_EVENT_SOURCE {
+  SYSTEM
+  ADMIN
+}
+
+model User {
+  id                          String             @id @default(uuid())
+  googleId                    String?
+  twitterId                   String?
+  facebookId                  String?
+  email                       String             @unique
+  password                    String?
+  name                        String
+  avatar                      String?
+  resetPasswordToken          String?
+  resetPasswordTokenExpiresAt DateTime?
+  role                        ROLE               @default(USER)
+  orders                      Order[]
+  payments                    Payment[]
+  addresses                   Address[]
+  interactions                Interaction[]
+  reports                     Report[]
+  reviews                     Review[]
+  carts                       Cart[]
+  cartEvents                  CartEvent[]
+  checkoutAttempts            CheckoutAttempt[]
+  checkoutRecoveries          CheckoutRecovery[]
+  chats                       Chat[]             @relation("UserChats")
+  messages                    ChatMessage[]
+  orderReminders              OrderReminder[]
+  goalBundles                 GoalBundle[]
+  sharedCartMemberships       SharedCartMember[]
+  sharedCartsOwned            SharedCart[]       @relation("SharedCartOwner")
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+  Restock                     Restock[]
+
+  @@index([email])
+}
+
+model Product {
+  id            String             @id @default(uuid())
+  name          String             @unique
+  description   String?
+  slug          String             @unique
+  salesCount    Int                @default(0)
+  isNew         Boolean            @default(false)
+  isFeatured    Boolean            @default(false)
+  isTrending    Boolean            @default(false)
+  isBestSeller  Boolean            @default(false)
+  averageRating Float              @default(0)
+  reviewCount   Int                @default(0)
+  category      Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId    String?
+  variants      ProductVariant[]
+  careGuides    ProductCareGuide[]
+  warranties    WarrantyInfo[]
+  interactions  Interaction[]
+  reviews       Review[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([name, slug])
+}
+
+model ProductVariant {
+  id                String                    @id @default(uuid())
+  productId         String
+  product           Product                   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku               String                    @unique
+  images            String[]                  @default([])
+  price             Float
+  stock             Int
+  lowStockThreshold Int                       @default(10)
+  barcode           String?
+  warehouseLocation String?
+  attributes        ProductVariantAttribute[]
+  orderItems        OrderItem[]
+  cartItems         CartItem[]
+  goalBundleItems   GoalBundleItem[]          @relation("GoalBundleItemVariant")
+  sharedCartNotes   SharedCartNote[]
+  sharedCartAssignments SharedCartAssignment[]
+  sharedCartVotes   SharedCartVote[]
+  stockMovements    StockMovement[]
+  restocks          Restock[]
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([productId, sku])
+}
+
+model Attribute {
+  id                String                    @id @default(uuid())
+  name              String                    @unique
+  slug              String                    @unique
+  values            AttributeValue[]
+  categories        CategoryAttribute[]
+  variantAttributes ProductVariantAttribute[]
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([name, slug])
+}
+
+model AttributeValue {
+  id                String                    @id @default(uuid())
+  attributeId       String
+  attribute         Attribute                 @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value             String
+  slug              String                    @unique
+  variantAttributes ProductVariantAttribute[]
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([attributeId, value])
+}
+
+model ProductVariantAttribute {
+  id          String         @id @default(uuid())
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeId String
+  attribute   Attribute      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  valueId     String
+  value       AttributeValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+
+  @@unique([variantId, attributeId, valueId])
+  @@index([variantId, attributeId])
+}
+
+model Category {
+  id          String              @id @default(uuid())
+  slug        String              @unique
+  name        String
+  description String?
+  images      String[]
+  products    Product[]
+  attributes  CategoryAttribute[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([name, slug])
+}
+
+model CategoryAttribute {
+  id          String    @id @default(uuid())
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attributeId String
+  attribute   Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  isRequired  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([categoryId, attributeId])
+  @@index([categoryId, attributeId])
+}
+
+model StockMovement {
+  id        String         @id @default(uuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int
+  reason    String
+  userId    String?
+  createdAt DateTime       @default(now())
+
+  @@index([variantId])
+}
+
+model Restock {
+  id        String         @id @default(uuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int
+  notes     String?
+  userId    String?
+  user      User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime       @default(now())
+
+  @@index([variantId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, userId])
+}
+
+model Order {
+  id                 String              @id @default(uuid())
+  userId             String
+  goalTemplateId     String?
+  goalBundleId       String?
+  amount             Float
+  orderDate          DateTime            @default(now())
+  status             String              @default("PENDING")
+  user               User                @relation(fields: [userId], references: [id])
+  goalTemplate       GoalTemplate?       @relation("GoalTemplateOrders", fields: [goalTemplateId], references: [id], onDelete: SetNull)
+  goalBundle         GoalBundle?         @relation("GoalBundleOrders", fields: [goalBundleId], references: [id], onDelete: SetNull)
+  orderItems         OrderItem[]
+  trackingEvents     OrderTrackingEvent[]
+  payment            Payment?            @relation("OrderPayment")
+  companion          OrderCompanion?
+  reminders          OrderReminder[]
+  goalSuccessCheckin GoalSuccessCheckin?
+  supportChats       Chat[]              @relation("OrderSupportChats")
+  address            Address?            @relation("OrderAddress")
+  shipment           Shipment?           @relation("OrderShipment")
+  transaction        Transaction?        @relation("OrderTransaction")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([goalTemplateId, goalBundleId])
+}
+
+model OrderItem {
+  id        String         @id @default(uuid())
+  orderId   String
+  variantId String
+  quantity  Int
+  price     Float
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([orderId, variantId])
+}
+
+model Payment {
+  id        String         @id @default(uuid())
+  method    String
+  amount    Float
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  order     Order?         @relation("OrderPayment", fields: [orderId], references: [id], onDelete: SetNull)
+  orderId   String?        @unique
+  status    PAYMENT_STATUS @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([userId, orderId])
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  city      String
+  state     String
+  country   String
+  zip       String
+  street    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  order     Order?   @relation("OrderAddress", fields: [orderId], references: [id], onDelete: SetNull)
+  orderId   String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, orderId])
+}
+
+model Shipment {
+  id             String    @id @default(uuid())
+  carrier        String
+  trackingNumber String
+  shippedDate    DateTime
+  deliveryDate   DateTime?
+  order          Order     @relation("OrderShipment", fields: [orderId], references: [id], onDelete: Cascade)
+  orderId        String    @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([orderId])
+}
+
+model Transaction {
+  id              String             @id @default(uuid())
+  order           Order              @relation("OrderTransaction", fields: [orderId], references: [id], onDelete: Cascade)
+  orderId         String             @unique
+  status          TRANSACTION_STATUS @default(PENDING)
+  transactionDate DateTime           @default(now())
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([orderId])
+}
+
+model OrderTrackingEvent {
+  id             String                      @id @default(uuid())
+  orderId        String
+  order          Order                       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status         TRANSACTION_STATUS
+  title          String
+  description    String?
+  location       String?
+  carrier        String?
+  trackingNumber String?
+  source         ORDER_TRACKING_EVENT_SOURCE @default(SYSTEM)
+  occurredAt     DateTime                    @default(now())
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@index([orderId, occurredAt])
+}
+
+model Cart {
+  id                 String             @id @default(uuid())
+  user               User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId             String?
+  sessionId          String?            @unique
+  goalTemplateId     String?
+  goalBundleId       String?
+  goalTemplate       GoalTemplate?      @relation("GoalTemplateCarts", fields: [goalTemplateId], references: [id], onDelete: SetNull)
+  goalBundle         GoalBundle?        @relation("GoalBundleCarts", fields: [goalBundleId], references: [id], onDelete: SetNull)
+  cartItems          CartItem[]
+  cartEvents         CartEvent[]
+  checkoutAttempts   CheckoutAttempt[]
+  checkoutRecoveries CheckoutRecovery[]
+  sharedCart         SharedCart?
+  status             CART_STATUS        @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([userId, sessionId])
+  @@index([goalTemplateId, goalBundleId])
+}
+
+model CartItem {
+  id        String         @id @default(uuid())
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cartId    String
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int            @default(1)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([cartId, variantId])
+  @@index([cartId, variantId])
+}
+
+enum CART_EVENT {
+  PENDING
+  ADD
+  CHECKOUT_STARTED
+  CHECKOUT_COMPLETED
+}
+
+model CartEvent {
+  id        String     @id @default(uuid())
+  cartId    String
+  userId    String?
+  sessionId String?
+  eventType CART_EVENT @default(PENDING)
+  timestamp DateTime   @default(now())
+  cart      Cart       @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime   @default(now())
+}
+
+model Interaction {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId String?
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  type      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, sessionId, productId])
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  type       String
+  format     String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  parameters Json
+  filePath   String?
+
+  @@index([userId])
+}
+
+model Log {
+  id        String   @id @default(uuid())
+  level     String
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+}
+
+enum SECTION_TYPE {
+  HERO
+  PROMOTIONAL
+  BENEFITS
+  NEW_ARRIVALS
+}
+
+model Section {
+  id             Int          @id @unique @default(autoincrement())
+  type           SECTION_TYPE @default(HERO)
+  title          String?
+  description    String?
+  images         String[]     @default([])
+  icons          String?
+  link           String?
+  ctaText        String?
+  isVisible      Boolean?     @default(false)
+  primaryColor   String?
+  secondaryColor String?
+}
+
+model Chat {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation("UserChats", fields: [userId], references: [id], onDelete: Cascade)
+  orderId   String?
+  order     Order?        @relation("OrderSupportChats", fields: [orderId], references: [id], onDelete: SetNull)
+  status    CHAT_STATUS   @default(OPEN)
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([orderId])
+  @@index([userId, orderId, status])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content   String?
+  type      String   @default("TEXT")
+  url       String?
+  createdAt DateTime @default(now())
+
+  @@index([chatId, senderId])
+}
+
+model CheckoutAttempt {
+  id                String                  @id @default(uuid())
+  userId            String
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cartId            String
+  cart              Cart                    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  status            CHECKOUT_ATTEMPT_STATUS @default(STARTED)
+  provider          String                  @default("stripe")
+  amount            Float
+  checkoutReference String?
+  failureReason     String?
+  cartSnapshot      Json
+  recovery          CheckoutRecovery?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([userId, cartId, status])
+}
+
+model CheckoutRecovery {
+  id                String                   @id @default(uuid())
+  checkoutAttemptId String                   @unique
+  checkoutAttempt   CheckoutAttempt          @relation(fields: [checkoutAttemptId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cartId            String
+  cart              Cart                     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  code              String                   @unique
+  status            CHECKOUT_RECOVERY_STATUS @default(OPEN)
+  lastError         String?
+  chatId            String?
+  cartSnapshot      Json
+  resumedAt         DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([userId, status, updatedAt])
+}
+
+model OrderCompanion {
+  id                    String          @id @default(uuid())
+  orderId               String          @unique
+  order                 Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  headline              String
+  supportLabel          String
+  supportDescription    String
+  reorderRecommendation String
+  reorderSuggestedDays  Int             @default(30)
+  tasks                 CompanionTask[]
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([orderId])
+}
+
+model CompanionTask {
+  id          String              @id @default(uuid())
+  companionId String
+  companion   OrderCompanion      @relation(fields: [companionId], references: [id], onDelete: Cascade)
+  kind        COMPANION_TASK_KIND
+  title       String
+  description String
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([companionId, kind, sortOrder])
+}
+
+model ProductCareGuide {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, sortOrder])
+}
+
+model WarrantyInfo {
+  id           String   @id @default(uuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title        String
+  description  String
+  provider     String?
+  durationDays Int?
+  claimSteps   String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([productId])
+}
+
+model OrderReminder {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  remindAt  DateTime
+  note      String?
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId, userId])
+}
+
+model GoalTemplate {
+  id              String             @id @default(uuid())
+  slug            String             @unique
+  title           String
+  description     String
+  audience        String
+  suggestedBudget Float
+  steps           GoalTemplateStep[]
+  bundles         GoalBundle[]
+  outcomeCheckins GoalSuccessCheckin[]
+  carts           Cart[]             @relation("GoalTemplateCarts")
+  orders          Order[]            @relation("GoalTemplateOrders")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([slug])
+}
+
+model GoalTemplateStep {
+  id               String       @id @default(uuid())
+  goalTemplateId   String
+  goalTemplate     GoalTemplate @relation(fields: [goalTemplateId], references: [id], onDelete: Cascade)
+  stepKey          String
+  label            String
+  description      String
+  categoryNames    String[]     @default([])
+  fallbackKeywords String[]     @default([])
+  budgetWeight     Float
+  sortOrder        Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([goalTemplateId, stepKey])
+  @@index([goalTemplateId, sortOrder])
+}
+
+model GoalBundle {
+  id              String           @id @default(uuid())
+  goalTemplateId  String?
+  goalTemplate    GoalTemplate?    @relation(fields: [goalTemplateId], references: [id], onDelete: SetNull)
+  bundleType      GOAL_BUNDLE_TYPE @default(CURATED)
+  userId          String?
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId       String?
+  name            String?
+  brief           Json?
+  shareCode       String?          @unique
+  budget          Float
+  total           Float
+  remainingBudget Float
+  items           GoalBundleItem[]
+  carts           Cart[]           @relation("GoalBundleCarts")
+  orders          Order[]          @relation("GoalBundleOrders")
+  sharedCarts     SharedCart[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([goalTemplateId, bundleType, createdAt])
+  @@index([userId, sessionId, createdAt])
+  @@index([shareCode])
+}
+
+model GoalBundleItem {
+  id              String         @id @default(uuid())
+  goalBundleId    String
+  goalBundle      GoalBundle     @relation(fields: [goalBundleId], references: [id], onDelete: Cascade)
+  stepKey         String
+  stepLabel       String
+  stepDescription String
+  variantId       String
+  variant         ProductVariant @relation("GoalBundleItemVariant", fields: [variantId], references: [id], onDelete: Cascade)
+  allocatedBudget Float
+  price           Float
+  quantity        Int            @default(1)
+  selectionReason String?
+  locked          Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([goalBundleId, stepKey])
+}
+
+model GoalSuccessCheckin {
+  id                String                     @id @default(uuid())
+  orderId           String                     @unique
+  order             Order                      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  goalTemplateId    String?
+  goalTemplate      GoalTemplate?              @relation(fields: [goalTemplateId], references: [id], onDelete: SetNull)
+  status            GOAL_SUCCESS_STATUS        @default(PENDING)
+  satisfactionScore Int?
+  primaryReason     GOAL_SUCCESS_REASON?
+  notes             String?
+  submittedAt       DateTime?
+  interventions     GoalSuccessIntervention[]
+  stages            GoalSuccessStageCheckin[]
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@index([goalTemplateId, status])
+}
+
+model GoalSuccessIntervention {
+  id          String                         @id @default(uuid())
+  checkinId   String
+  checkin     GoalSuccessCheckin             @relation(fields: [checkinId], references: [id], onDelete: Cascade)
+  type        GOAL_SUCCESS_INTERVENTION_TYPE
+  title       String
+  description String
+  ctaLabel    String?
+  ctaHref     String?
+  sortOrder   Int                            @default(0)
+  createdAt   DateTime                       @default(now())
+  updatedAt   DateTime                       @updatedAt
+
+  @@index([checkinId, sortOrder])
+}
+
+model GoalSuccessStageCheckin {
+  id                String                   @id @default(uuid())
+  checkinId         String
+  checkin           GoalSuccessCheckin       @relation(fields: [checkinId], references: [id], onDelete: Cascade)
+  stage             GOAL_SUCCESS_STAGE
+  status            GOAL_SUCCESS_STATUS      @default(PENDING)
+  satisfactionScore Int?
+  primaryReason     GOAL_SUCCESS_REASON?
+  notes             String?
+  submittedAt       DateTime?
+  steps             GoalSuccessStepCheckin[]
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@unique([checkinId, stage])
+  @@index([stage, status])
+}
+
+model GoalSuccessStepCheckin {
+  id             String                   @id @default(uuid())
+  stageCheckinId String
+  stageCheckin   GoalSuccessStageCheckin  @relation(fields: [stageCheckinId], references: [id], onDelete: Cascade)
+  stepKey        String
+  stepLabel      String
+  status         GOAL_STEP_SUCCESS_STATUS @default(PENDING)
+  notes          String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@unique([stageCheckinId, stepKey])
+  @@index([stageCheckinId, status])
+}
+
+model SharedCart {
+  id          String                 @id @default(uuid())
+  code        String                 @unique
+  cartId      String                 @unique
+  goalBundleId String?
+  cart        Cart                   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  goalBundle  GoalBundle?            @relation(fields: [goalBundleId], references: [id], onDelete: SetNull)
+  ownerId     String
+  owner       User                   @relation("SharedCartOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  title       String?
+  expiresAt   DateTime?
+  inviteMode  SHARED_CART_INVITE_MODE @default(COLLABORATE)
+  isReadOnly  Boolean                @default(false)
+  members     SharedCartMember[]
+  votes       SharedCartVote[]
+  notes       SharedCartNote[]
+  assignments SharedCartAssignment[]
+  activities  SharedCartActivity[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@index([ownerId])
+  @@index([goalBundleId])
+}
+
+model SharedCartMember {
+  id           String                  @id @default(uuid())
+  sharedCartId String
+  sharedCart   SharedCart              @relation(fields: [sharedCartId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId    String?
+  token        String
+  displayName  String
+  role         SHARED_CART_MEMBER_ROLE @default(CONTRIBUTOR)
+  lastSeenAt   DateTime                @default(now())
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@unique([sharedCartId, token])
+  @@index([sharedCartId, userId, sessionId])
+}
+
+model SharedCartVote {
+  id           String                @id @default(uuid())
+  sharedCartId String
+  sharedCart   SharedCart            @relation(fields: [sharedCartId], references: [id], onDelete: Cascade)
+  variantId    String
+  variant      ProductVariant        @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  memberToken  String
+  displayName  String
+  vote         SHARED_CART_VOTE_TYPE
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@unique([sharedCartId, variantId, memberToken])
+  @@index([sharedCartId, variantId])
+}
+
+model SharedCartNote {
+  id           String          @id @default(uuid())
+  sharedCartId String
+  sharedCart   SharedCart      @relation(fields: [sharedCartId], references: [id], onDelete: Cascade)
+  variantId    String?
+  variant      ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  memberToken  String
+  authorName   String
+  content      String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([sharedCartId, variantId])
+}
+
+model SharedCartAssignment {
+  id           String                        @id @default(uuid())
+  sharedCartId String
+  sharedCart   SharedCart                    @relation(fields: [sharedCartId], references: [id], onDelete: Cascade)
+  variantId    String
+  variant      ProductVariant                @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  memberToken  String
+  assigneeName String
+  quantity     Int                           @default(1)
+  status       SHARED_CART_ASSIGNMENT_STATUS @default(CLAIMED)
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+
+  @@unique([sharedCartId, variantId, memberToken])
+  @@index([sharedCartId, variantId])
+}
+
+model SharedCartActivity {
+  id           String                    @id @default(uuid())
+  sharedCartId String
+  sharedCart   SharedCart                @relation(fields: [sharedCartId], references: [id], onDelete: Cascade)
+  memberToken  String?
+  actorName    String?
+  type         SHARED_CART_ACTIVITY_TYPE
+  message      String
+  payload      Json?
+  createdAt    DateTime                  @default(now())
+
+  @@index([sharedCartId, createdAt])
+}

@@ -1,0 +1,33 @@
+# Root dependencies
+/node_modules/
+
+# Build output
+/coverage/
+/src/client/.next/
+/src/client/out/
+/src/client/build/
+/src/server/dist/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+/src/.env
+/src/**/*.env
+/src/**/*.env.*
+
+# Logs and runtime temp files
+*.log
+*.pid
+/tmp/
+/src/server/tmp-server-*
+
+# Editor and workspace files
+/.idea/
+/.qodo/
+/.vscode/
+
+# OS / misc
+.DS_Store
+Thumbs.db
+.vercel/
